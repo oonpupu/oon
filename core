@@ -1,0 +1,214 @@
+from tkinter import *
+from functools import partial
+import random
+import turtle
+
+class Game: #class for starting the Game
+    def __init__(self):
+        # Main screen
+        self.screen = Tk()
+        self.screen.title("서주원 RPG")
+        self.screen.geometry("300x200+750+350")
+
+        # Window Manager
+        self.WindowManager = WindowManager(self.screen)
+
+        # Callbacks
+        self.player = Player(100, 100, 100, self.screen)
+        self.events = GameEvents(self.WindowManager, self.player)
+
+        # Main
+        self.introduction = Label(self.screen, text="서주원 RPG 에 오신 것을 환영합니다! 거창한 것은 없습니다. 마을의 촌장에게 인정받아 모험을 떠날 자격을 얻으세요!", wraplength=150)
+        self.introduction.pack(pady=20)
+        self.start_button = Button(self.screen, text="시작", command=partial(self.events.start, self.screen))
+        self.start_button.pack(pady=10)
+        
+    def run(self):
+        self.screen.mainloop()
+
+
+class GameEvents:
+    def __init__(self, window_manager, player):
+        self.player = player
+        self.WindowManager = window_manager
+        
+    def start(self, background):
+        self.village = self.WindowManager.create_window("마을", '200x200+500+500', background)
+
+        self.store = Button(self.village, text="상점", command=partial(self.merchant, self.village))
+        self.old_man = Button(self.village, text="촌장에게 가기", command=partial(self.meet_village_leader, self.village))
+        self.work = Button(self.village, text="돈 벌기", command=partial(self.make_money, self.village))
+        
+        self.store.pack(pady=20)
+        self.old_man.pack(pady=20)
+        self.work.pack(pady=20)
+
+    def make_money(self, background):
+        employer = NPC(10, 1, "고용주", [], self.WindowManager)
+        self.employer_screen = self.WindowManager.create_window("일터", "200x200+500+500", background)
+        self.mine_button = Button(self.employer_screen, text="채굴", command=self.mine)
+        self.slay_monsters_button = Button(self.employer_screen, text=" 몬스터 사냥(공격력 20 이상일 때 가능)", command=self.slay_monsters)
+        self.mine_button.pack(pady=20)
+        self.slay_monsters_button.pack(pady=20)
+
+    def slay_monsters(self):
+        if self.player.damage >= 20 and self.player.hp - 20 > 0:
+            self.player.money += 70
+            self.player.hp -= 20
+
+        for x in range(1, 5):
+            self.player.update_status()
+
+    def mine(self):
+        if self.player.hp - 10 > 0:
+            self.player.money += 30
+            self.player.hp -= 10
+
+        for x in range(1, 5):
+            self.player.update_status()
+        
+
+    def merchant(self, background):
+        seller = NPC(10, 1, "상인", [], self.WindowManager)
+        self.merchant_screen = self.WindowManager.create_window("상점", "200x200+500+500", background)
+        self.knife = Button(self.merchant_screen, text="단도", command=self.purchase_knife)
+        self.potion = Button(self.merchant_screen, text="포션", command=self.purchase_potion)
+        self.knife.pack(pady=20)
+        self.potion.pack(pady=20)
+
+    def purchase_knife(self):
+        if self.player.money >= 50:
+            print('purchased')
+            self.player.money -= 50
+            self.player.damage += 5
+        print(self.player.money)
+        print(self.player.damage)
+
+        for x in range(1, 5):  # 플레이어 스테이터스 업데이트. 1번으로 적용이 안되는 경우가 있기에 for loop 적용
+            self.player.update_status()
+
+    def purchase_potion(self):
+        if self.player.money >= 20:
+            print('purchased')
+            self.player.money -= 20
+            if self.player.hp < 100:
+                self.player.hp += 10
+        for x in range(1, 5):  # 플레이어 스테이터스 업데이트. 1번으로 적용이 안되는 경우가 있기에 for loop 적용
+            self.player.update_status()
+    
+    def meet_village_leader(self, background):
+        if self.player.damage < 10:
+            village_leader_script = ['아 자네인가', '소문은 익히 들었다네', '강해진 다음에 돌아오게나', '체력 - 50']
+            village_leader = NPC(10, 2, '촌장', village_leader_script, self.WindowManager)
+            village_leader.open_conversation(background)
+            if self.player.hp > 0:
+                self.player.hp -= 50
+                self.player.update_status()
+        elif self.player.damage >= 50:
+            self.victory(self.player.hp / 100)
+        else:
+            print('error')
+        
+    def victory(self, red_length):
+        turtle.color('red')
+        turtle.pensize(30)
+        turtle.circle(100, 360*(red_length))
+        turtle.color('black')
+        turtle.circle(100, 360*(1 - red_length))
+
+class Player:
+    def __init__(self, max_hp, mp, money, background):
+        self.name = '무명'
+        self.hp = max_hp
+        self.mp = mp
+        self.money = money
+        self.damage = 5
+        
+        self.hud = Toplevel()
+        self.hud.title("상태창")
+        self.hud.geometry('400x700+1100+100')
+        self.name_hud = Label(self.hud, text=f"이름: {self.name}")
+        self.hp_hud = Label(self.hud, text=f"HP: {self.hp}")
+        self.mp_hud = Label(self.hud, text=f"MP: {self.mp}")
+        self.money_hud = Label(self.hud, text=f"소유금: {self.money}")
+        self.damage_hud = Label(self.hud, text=f"공격력: {self.damage}")
+        self.damage_hud.pack(pady=20)
+        self.name_hud.pack(pady=20)
+        self.hp_hud.pack(pady=20)
+        self.mp_hud.pack(pady=20)
+        self.money_hud.pack(pady=20)
+
+    def update_status(self):
+        self.name_hud.config(text=f"이름: {self.name}")
+        self.hp_hud.config(text=f"HP: {self.hp}")
+        self.mp_hud.config(text=f"MP: {self.mp}")
+        self.money_hud.config(text=f"소유금: {self.money}")
+        self.damage_hud.config(text=f"공격력: {self.damage}")
+
+        if self.hp <= 0:
+            self.death()
+
+    def death(self):
+        print('you died')
+
+class NPC:
+    def __init__(self, hp, damage, name, script, window_manager):
+        self.WindowManager = window_manager
+        self.monologue = script
+        self.monologue_count = -1
+        self.name = name
+        self.hp = hp
+        self.damage = damage
+
+    def open_conversation(self, background):
+        self.conversation_window = self.WindowManager.create_window(self.name, '400x200+500+500', background)
+
+        self.text = Text(self.conversation_window, height=10, width=50, wrap="word", state=NORMAL)
+        self.next = Button(self.conversation_window, text="다음", command=partial(self.process_monologue, self.text))
+
+        self.text.pack()
+        self.next.pack()
+
+    def process_monologue(self, area):
+        if self.monologue_count < len(self.monologue) - 1:
+            self.monologue_count += 1
+            area.delete('1.0', END)
+            area.insert('1.0', self.monologue[self.monologue_count])
+        if self.monologue_count == len(self.monologue) - 1:
+            self.WindowManager.on_close()
+
+
+class WindowManager:
+    def __init__(self, root):
+        self.root = root
+        self.windows = []
+        self.root.after(1000, self.focus_newest_window)
+
+    def create_window(self, title, geometry, root):
+        new_window = Toplevel(root)
+        new_window.title(title)
+        new_window.geometry(geometry)
+        self.windows.append(new_window)
+
+        new_window.protocol("WM_DELETE_WINDOW", self.on_close)
+
+        return new_window
+
+    def on_close(self):
+        self.windows[-1].destroy()
+        self.windows = [w for w in self.windows if w.winfo_exists()]
+
+    def focus_newest_window(self):
+        print(self.windows) # 열려 있는 윈도우 목록 확인(디버깅 용)
+        if self.windows:
+            newest_window = self.windows[-1]
+            if newest_window.winfo_exists():
+                newest_window.grab_set()
+
+        self.root.after(1000, self.focus_newest_window)
+    
+if __name__ == "__main__":
+    Game = Game()
+    Game.run()
+    
+    
